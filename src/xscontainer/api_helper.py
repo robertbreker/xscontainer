@@ -470,7 +470,8 @@ def get_suitable_vm_ip(session, vmuuid):
             # Ignore ipv6 as Dom0 won't be able to use it
             pass
     for address in stage1filteredips:
-        if util.test_connection(address, 22):
+        if ((util.test_connection(address, 2375)
+             or util.test_connection(address, 22))):
             return address
     raise util.XSContainerException(
         "No valid IP found for vmuuid %s" % (vmuuid))

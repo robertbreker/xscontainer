@@ -72,10 +72,68 @@ class MyHostKeyPolicy(paramiko.MissingHostKeyPolicy):
             return
 
 
+class SshLikeTcpClient:
+    asocket = None
+
+    def __init__(self, host, port):
+        self.asocket = socket.socket()
+        self.asocket.connect((host, port))
+
+    def close(self):
+        if self.asocket:
+            self.asocket.close()
+            self.asocket = None
+
+    def __del__(self):
+        self.close()
+
+    def exec_command(self, command):
+        ahandle = SshLikeFileHandle(self.asocket.fileno())
+        return (ahandle, ahandle, ahandle)
+
+
+class SshLikeChannel:
+    afileno = None
+
+    def __init__(self, fileno):
+        self.afileno = fileno
+
+    def shutdown_write(self):
+        pass
+
+    def recv_exit_status(self):
+        return 0
+
+    def fileno(self):
+        return self.afileno
+
+
+class SshLikeFileHandle:
+    afileno = None
+    channel = None
+
+    def __init__(self, fileno):
+        self.afileno = fileno
+        self.channel = SshLikeChannel(fileno)
+
+    def read(self, length):
+        return os.read(self.afileno, length)
+
+    def write(self, data):
+        os.write(self.afileno, data)
+        log.info("write %s" % data)
+
+
 def prepare_ssh_client(session, vmuuid):
     username = api_helper.get_vm_xscontainer_username(session, vmuuid)
     host = api_helper.get_suitable_vm_ip(session, vmuuid)
     log.info("prepare_ssh_client for vm %s via %s" % (vmuuid, host))
+    # Hack: Let's try unencrypted first
+    try:
+        return SshLikeTcpClient(host, 2375)
+    except:
+        # fall back to SSH
+        pass
     ensure_idrsa(session)
     client = paramiko.SSHClient()
     pkey = paramiko.rsakey.RSAKey.from_private_key(
